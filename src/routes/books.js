@@ -1,27 +1,11 @@
 const express = require('express');
 const router = express.Router();
 
+const upload = require('../middleware/upload');
+const arrayOfBooks = require('../data/books');
+
 // Временное хранилище (вместо БД)
-let books = [
-  {
-    id: '1',
-    title: 'Война и мир',
-    description: 'Роман-эпопея Льва Толстого',
-    authors: 'Лев Толстой',
-    favorite: 'true',
-    fileCover: 'war-and-peace.jpg',
-    fileName: 'war-and-peace.pdf',
-  },
-  {
-    id: '2',
-    title: 'Преступление и наказание',
-    description: 'Роман Фёдора Достоевского',
-    authors: 'Фёдор Достоевский',
-    favorite: 'true',
-    fileCover: 'crime-and-punishment.jpg',
-    fileName: 'crime-and-punishment.pdf',
-  },
-];
+let books = arrayOfBooks;
 
 // Получить все книги
 router.get('/', (_, res) => {
@@ -40,44 +24,63 @@ router.get('/:id', (req, res) => {
   }
 });
 
-// Создать новую книгу
-router.post('/', (req, res) => {
-  const { title, description, authors, favorite, fileCover, fileName } =
-    req.body;
-  const newBook = {
-    id: Date.now().toString(),
-    title,
-    description,
-    authors,
-    favorite,
-    fileCover,
-    fileName,
-  };
-  books.push(newBook);
-  res.status(201).json(newBook);
-});
+// Создать новую книгу с загрузкой файла
+router.post('/', upload.single('fileBook'), (req, res) => {
+  try {
+    const { title, description, authors, favorite, fileCover } = req.body;
 
-// Редактировать книгу по ID
-router.put('/:id', (req, res) => {
-  const { id } = req.params;
-  const { title, description, authors, favorite, fileCover, fileName } =
-    req.body;
-  const index = books.findIndex((el) => el.id === id);
+    if (!title || !description || !authors) {
+      return res.status(400).json({ error: 'Не заполнены обязательные поля' });
+    }
 
-  if (index !== -1) {
-    books[index] = {
-      ...books[index],
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл книги не был загружен' });
+    }
+
+    const newBook = {
+      id: Date.now().toString(),
       title,
       description,
       authors,
-      favorite,
+      favorite: favorite === 'true',
       fileCover,
-      fileName,
+      fileName: req.file.originalname,
+      fileBook: `/books/${req.file.filename}`, // -> путь к загруженному файлу
     };
-    res.json(books[index]);
-  } else {
-    res.status(404).json({ error: 'Книга не найдена' });
+
+    books.push(newBook);
+    res.status(201).json(newBook);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
+});
+
+// Редактировать книгу по ID (с возможностью обновления файла)
+router.put('/:id', upload.single('fileBook'), (req, res) => {
+  const { id } = req.params;
+  const { title, description, authors, favorite, fileCover } = req.body;
+  const index = books.findIndex((el) => el.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Книга не найдена' });
+  }
+
+  const updatedBook = {
+    ...books[index],
+    title,
+    description,
+    authors,
+    favorite: favorite === 'true',
+    fileCover,
+  };
+
+  if (req.file) {
+    updatedBook.fileName = req.file.originalname;
+    updatedBook.fileBook = `/books/${req.file.filename}`;
+  }
+
+  books[index] = updatedBook;
+  res.json(updatedBook);
 });
 
 // Удалить книгу по ID
