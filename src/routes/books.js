@@ -1,3 +1,6 @@
+const path = require('node:path');
+const fs = require('node:fs');
+
 const express = require('express');
 const router = express.Router();
 
@@ -94,6 +97,35 @@ router.delete('/:id', (req, res) => {
   } else {
     res.status(404).json({ error: 'Книга не найдена' });
   }
+});
+
+// Скачивание файла книги по ID
+router.get('/:id/download', (req, res) => {
+  const { id } = req.params;
+  const book = books.find((el) => el.id === id);
+
+  if (!book) {
+    return res.status(404).json({ error: 'Книга не найдена' });
+  }
+
+  if (!book.fileBook) {
+    return res.status(404).json({ error: 'Файл книги не найден' });
+  }
+
+  const filePath = path.join(__dirname, '../public', book.fileBook);
+
+  // Проверяем существует ли файл
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Файл не найден на сервере' });
+  }
+
+  // Отправляем файл для скачивания
+  res.download(filePath, book.fileName, (err) => {
+    if (err) {
+      console.error('Ошибка при скачивании файла:', err);
+      res.status(500).json({ error: 'Ошибка при скачивании файла' });
+    }
+  });
 });
 
 module.exports = router;
